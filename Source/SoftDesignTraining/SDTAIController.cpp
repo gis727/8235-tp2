@@ -59,13 +59,22 @@ void ASDTAIController::OnMoveCompleted(FAIRequestID RequestID, const FPathFollow
     Super::OnMoveCompleted(RequestID, Result);
 
     m_ReachedTarget = true;
+
 }
 
 void ASDTAIController::ShowNavigationPath()
 {
-	//TODO: GetPathFollowingComponent() line in-between each points of this thingy
-    //Show current navigation path DrawDebugLine and DrawDebugSphere
-	//DrawDebugLine(GetWorld(), GetPawn()->GetActorLocation(), targetActor->GetActorLocation(), FColor::Blue);
+    // Get the current path
+    auto navSystem = FNavigationSystem::GetCurrent<UNavigationSystemV1>(this);
+    auto path = navSystem->FindPathToLocationSynchronously(GetWorld(), GetPawn()->GetActorLocation(), m_TargetActor->GetActorLocation());
+    
+    // Draw a line between each points on the path
+    FVector previousPoint = GetPawn()->GetActorLocation();
+    for (FVector point: path->PathPoints)
+    {
+        DrawDebugLine(GetWorld(), previousPoint, point, FColor::Red);
+        previousPoint = point;
+    }
 }
 
 void ASDTAIController::ChooseBehavior(float deltaTime)

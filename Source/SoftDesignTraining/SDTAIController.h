@@ -57,4 +57,6 @@ private:
     virtual void GoToBestTarget(float deltaTime) override;
     virtual void ChooseBehavior(float deltaTime) override;
     virtual void ShowNavigationPath() override;
+
+    AActor* m_TargetActor;
 };
