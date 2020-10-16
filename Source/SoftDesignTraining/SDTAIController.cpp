@@ -19,34 +19,44 @@ ASDTAIController::ASDTAIController(const FObjectInitializer& ObjectInitializer)
 
 void ASDTAIController::GoToBestTarget(float deltaTime)
 {
-	//UE_LOG(LogTemp, Warning, TEXT("Is go to best target"));
 	TArray<AActor*> targetActors;
 
 	// find all collectibles in the level
 	UGameplayStatics::GetAllActorsOfClass(GetWorld(), ASDTCollectible::StaticClass(), targetActors);
+
 	// find nearest actor
-	float minDistance = 2000000000000000;
+    float minDistance = MAX_FLT;
 	AActor* targetActor = nullptr;
+
 	for (AActor* actor : targetActors)
 	{
-		// navmesh distance
-		float distance = 0.0f;
+		float distanceToTarget = 0.0f;
 
+        // check if the distance to the target is partial
 		const UNavigationSystemV1* navSystem = FNavigationSystem::GetCurrent<UNavigationSystemV1>(this);
-		navSystem->GetPathLength(GetPawn()->GetActorLocation(), actor->GetActorLocation(), distance);
-		if (distance < minDistance && !navSystem->FindPathToLocationSynchronously(GetWorld(), GetPawn()->GetActorLocation(), actor->GetActorLocation())->IsPartial()) {
-			//TODO: check if collectible is not deactivated and someone is not going there already (add property to collectible to see if is targeted and then tell him to fuck off)???
-			targetActor = actor;
-			minDistance = distance;
+		navSystem->GetPathLength(GetPawn()->GetActorLocation(), actor->GetActorLocation(), distanceToTarget);
+        const bool distanceIsPartial = navSystem->FindPathToLocationSynchronously(GetWorld(), GetPawn()->GetActorLocation(), actor->GetActorLocation())->IsPartial();
+
+        // check if target is visible
+        ASDTCollectible* collectible = dynamic_cast <ASDTCollectible*>(actor);
+        const bool targetIsVisible = collectible->GetStaticMeshComponent()->IsVisible();
+        
+        // check if no other pawn is already heading towards this
+        const bool targetIsTargeted = !collectible->m_currentSeeker.IsEmpty() && collectible->m_currentSeeker != GetPawn()->GetActorLabel();
+        
+        if (distanceToTarget < minDistance && !distanceIsPartial && targetIsVisible && !targetIsTargeted) {
+            targetActor = actor;
+			minDistance = distanceToTarget;
+            collectible->m_currentSeeker = GetPawn()->GetActorLabel(); // tell the other pawns that this one is ours
 		}
 	}
-	// go to nearest actor
-	DrawDebugLine(GetWorld(), GetPawn()->GetActorLocation(), targetActor->GetActorLocation(), FColor::Blue);
 
-	if (targetActor) {
-
+	if (targetActor) { // go to nearest actor
+        m_TargetActor = targetActor;
 		MoveToLocation(targetActor->GetActorLocation(), -1.0f, true, true, true, true, 0, false);
 	}
+
+    if (m_TargetActor) ShowNavigationPath();
 }
 
 void ASDTAIController::OnMoveToTarget()
