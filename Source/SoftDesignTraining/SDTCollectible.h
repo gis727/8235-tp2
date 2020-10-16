@@ -19,6 +19,7 @@ public:
     void Collect();
     void OnCooldownDone();
     bool IsOnCooldown();
+    FString m_currentSeeker;
 
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = AI)
     float m_CollectCooldownDuration = 10.f;
