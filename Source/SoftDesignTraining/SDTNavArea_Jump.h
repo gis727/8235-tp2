@@ -16,4 +16,5 @@ class SOFTDESIGNTRAINING_API USDTNavArea_Jump : public UNavArea
 	
 public:
     USDTNavArea_Jump(const FObjectInitializer& ObjectInitializer);
+	void FinishDestroy();
 };
