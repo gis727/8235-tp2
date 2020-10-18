@@ -52,16 +52,15 @@ void ASDTAIController::GoToBestTarget(float deltaTime)
 	}
 
 	if (targetActor) { // go to nearest actor
-        m_TargetActor = targetActor;
 		MoveToLocation(targetActor->GetActorLocation(), -1.0f, true, true, true, true, 0, false);
-	}
-
-    if (m_TargetActor) ShowNavigationPath();
+        OnMoveToTarget(targetActor);
+    }
 }
 
-void ASDTAIController::OnMoveToTarget()
+void ASDTAIController::OnMoveToTarget(AActor* targetActor)
 {
     m_ReachedTarget = false;
+    m_TargetActor = targetActor;
 }
 
 void ASDTAIController::OnMoveCompleted(FAIRequestID RequestID, const FPathFollowingResult& Result)
@@ -74,11 +73,13 @@ void ASDTAIController::OnMoveCompleted(FAIRequestID RequestID, const FPathFollow
 
 void ASDTAIController::ShowNavigationPath()
 {
+    if (!m_TargetActor) return;
+
     // Get the current path
     auto navSystem = FNavigationSystem::GetCurrent<UNavigationSystemV1>(this);
     auto path = navSystem->FindPathToLocationSynchronously(GetWorld(), GetPawn()->GetActorLocation(), m_TargetActor->GetActorLocation());
     
-    // Draw a line between each points on the path
+    // Draw a line between all points on the path
     FVector previousPoint = GetPawn()->GetActorLocation();
     for (FVector point: path->PathPoints)
     {

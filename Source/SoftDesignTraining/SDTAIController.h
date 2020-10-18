@@ -49,7 +49,7 @@ public:
     void AIStateInterrupted();
 
 protected:
-    void OnMoveToTarget();
+    void OnMoveToTarget(AActor* targetActor);
     void GetHightestPriorityDetectionHit(const TArray<FHitResult>& hits, FHitResult& outDetectionHit);
     void UpdatePlayerInteraction(float deltaTime);
 
