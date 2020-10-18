@@ -39,6 +39,10 @@ void USDTPathFollowingComponent::SetMoveSegment(int32 segmentStartIndex)
     if (SDTUtils::HasJumpFlag(segmentStart) && FNavMeshNodeFlags(segmentStart.Flags).IsNavLink())
     {
         //Handle starting jump
+        ASDTAIController* controller = dynamic_cast<ASDTAIController*>(GetOwner());
+        Cast<UCharacterMovementComponent>(MovementComp)->SetMovementMode(MOVE_Flying);
+        controller->AtJumpSegment = true;
+        controller->InAir = true;
     }
     else
     {
