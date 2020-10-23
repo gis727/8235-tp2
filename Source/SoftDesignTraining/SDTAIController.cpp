@@ -11,48 +11,66 @@
 //#include "UnrealMathUtility.h"
 #include "SDTUtils.h"
 #include "EngineUtils.h"
+#include "SoftDesignTrainingMainCharacter.h"
 
 ASDTAIController::ASDTAIController(const FObjectInitializer& ObjectInitializer)
-    : Super(ObjectInitializer.SetDefaultSubobjectClass<USDTPathFollowingComponent>(TEXT("PathFollowingComponent")))
+    : Super(ObjectInitializer.SetDefaultSubobjectClass<USDTPathFollowingComponent>(TEXT("PathFollowingComponent"))),
+    m_currentObjective(PawnObjective::GetCollectibles)
 {
 }
 
 void ASDTAIController::GoToBestTarget(float deltaTime)
 {
-	TArray<AActor*> targetActors;
+    if (m_currentObjective == PawnObjective::GetCollectibles)
+    {
+        GoToBestCollectible();
+    }
+    else if (m_currentObjective == PawnObjective::ChasePlayer)
+    {
+        MoveToLocation(targetPlayer->GetComponentLocation(), -1.0f, true, true, true, true, 0, false);
+    }
+    else if (m_currentObjective == PawnObjective::EscapePlayer)
+    {
+        // TODO
+    }
+}
 
-	// find all collectibles in the level
-	UGameplayStatics::GetAllActorsOfClass(GetWorld(), ASDTCollectible::StaticClass(), targetActors);
+void ASDTAIController::GoToBestCollectible()
+{
+    TArray<AActor*> targetActors;
 
-	// find nearest actor
+    // find all collectibles in the level
+    UGameplayStatics::GetAllActorsOfClass(GetWorld(), ASDTCollectible::StaticClass(), targetActors);
+
+    // find nearest actor
     float minDistance = MAX_FLT;
-	AActor* targetActor = nullptr;
+    AActor* targetActor = nullptr;
 
-	for (AActor* actor : targetActors)
-	{
-		float distanceToTarget = 0.0f;
+    for (AActor* actor : targetActors)
+    {
+        float distanceToTarget = 0.0f;
 
         // check if the distance to the target is partial
-		const UNavigationSystemV1* navSystem = FNavigationSystem::GetCurrent<UNavigationSystemV1>(this);
-		navSystem->GetPathLength(GetPawn()->GetActorLocation(), actor->GetActorLocation(), distanceToTarget);
+        const UNavigationSystemV1* navSystem = FNavigationSystem::GetCurrent<UNavigationSystemV1>(this);
+        navSystem->GetPathLength(GetPawn()->GetActorLocation(), actor->GetActorLocation(), distanceToTarget);
         const bool distanceIsPartial = navSystem->FindPathToLocationSynchronously(GetWorld(), GetPawn()->GetActorLocation(), actor->GetActorLocation())->IsPartial();
 
         // check if target is visible
         ASDTCollectible* collectible = dynamic_cast <ASDTCollectible*>(actor);
         const bool targetIsVisible = collectible->GetStaticMeshComponent()->IsVisible();
-        
+
         // check if no other pawn is already heading towards this
         const bool targetIsTargeted = !collectible->m_currentSeeker.IsEmpty() && collectible->m_currentSeeker != GetPawn()->GetActorLabel();
-        
+
         if (distanceToTarget < minDistance && !distanceIsPartial && targetIsVisible && !targetIsTargeted) {
             targetActor = actor;
-			minDistance = distanceToTarget;
+            minDistance = distanceToTarget;
             collectible->m_currentSeeker = GetPawn()->GetActorLabel(); // tell the other pawns that this one is ours
-		}
-	}
+        }
+    }
 
-	if (targetActor) { // go to nearest actor
-		MoveToLocation(targetActor->GetActorLocation(), -1.0f, true, true, true, true, 0, false);
+    if (targetActor) { // go to nearest actor
+        MoveToLocation(targetActor->GetActorLocation(), -1.0f, true, true, true, true, 0, false);
         OnMoveToTarget(targetActor);
     }
 }
@@ -68,7 +86,6 @@ void ASDTAIController::OnMoveCompleted(FAIRequestID RequestID, const FPathFollow
     Super::OnMoveCompleted(RequestID, Result);
 
     m_ReachedTarget = true;
-
 }
 
 void ASDTAIController::ShowNavigationPath()
@@ -126,14 +143,27 @@ void ASDTAIController::UpdatePlayerInteraction(float deltaTime)
 	{
 		if (component->GetCollisionObjectType() != COLLISION_PLAYER)
 		{
-			GoToBestTarget(deltaTime);
+            m_currentObjective = PawnObjective::GetCollectibles;
 		}
-		else {
-			// Look for an escape if powered or kill if not powered
+		else if (TargetIsVisible(component->GetComponentLocation())) {
+
+            const bool playerIsPoweredUp = SDTUtils::IsPlayerPoweredUp(GetWorld());
+
+            if (playerIsPoweredUp) m_currentObjective = PawnObjective::EscapePlayer;
+            else m_currentObjective = PawnObjective::ChasePlayer;
+
+            targetPlayer = component;
+            m_ReachedTarget = true;
 		}
+        GoToBestTarget(deltaTime);
 	}
 
     DrawDebugCapsule(GetWorld(), detectionStartLocation + m_DetectionCapsuleHalfLength * selfPawn->GetActorForwardVector(), m_DetectionCapsuleHalfLength, m_DetectionCapsuleRadius, selfPawn->GetActorQuat() * selfPawn->GetActorUpVector().ToOrientationQuat(), FColor::Blue);
+}
+
+bool ASDTAIController::TargetIsVisible(FVector targetLocation)
+{
+    return !SDTUtils::Raycast(GetWorld(), GetPawn()->GetActorLocation(), targetLocation);
 }
 
 void ASDTAIController::GetHightestPriorityDetectionHit(const TArray<FHitResult>& hits, FHitResult& outDetectionHit)

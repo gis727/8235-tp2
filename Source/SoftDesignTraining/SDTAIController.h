@@ -63,6 +63,18 @@ private:
     virtual void GoToBestTarget(float deltaTime) override;
     virtual void ChooseBehavior(float deltaTime) override;
     virtual void ShowNavigationPath() override;
+    virtual void GoToBestCollectible();
+    virtual bool TargetIsVisible(FVector targetLocation);
+
+    // Current AI state
+    enum PawnObjective {
+        None,
+        GetCollectibles,
+        ChasePlayer,
+        EscapePlayer,
+    };
+    PawnObjective m_currentObjective;
+    UPrimitiveComponent* targetPlayer;
 
     AActor* m_TargetActor;
 };
