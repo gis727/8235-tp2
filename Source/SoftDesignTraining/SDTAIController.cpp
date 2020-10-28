@@ -8,7 +8,6 @@
 #include "DrawDebugHelpers.h"
 #include "Kismet/KismetMathLibrary.h"
 #include "NavigationSystem.h"
-//#include "UnrealMathUtility.h"
 #include "SDTUtils.h"
 #include "EngineUtils.h"
 #include "SoftDesignTrainingMainCharacter.h"
@@ -21,18 +20,61 @@ ASDTAIController::ASDTAIController(const FObjectInitializer& ObjectInitializer)
 
 void ASDTAIController::GoToBestTarget(float deltaTime)
 {
-    if (m_currentObjective == PawnObjective::GetCollectibles)
+    if      (m_currentObjective == PawnObjective::GetCollectibles) GoToBestCollectible();
+    else if (m_currentObjective == PawnObjective::ChasePlayer)     GoToPlayer();
+    else if (m_currentObjective == PawnObjective::EscapePlayer)    GoToBestFleeLocation();
+}
+
+void ASDTAIController::GoToBestFleeLocation()
+{
+    if (AActor* bestFleeLocation = GetBestFleeLocation())
     {
-        GoToBestCollectible();
+        MoveToLocation(bestFleeLocation->GetActorLocation(), -1.0f, true, true, true, true, 0, false);
+        OnMoveToTarget(bestFleeLocation);
     }
-    else if (m_currentObjective == PawnObjective::ChasePlayer)
+}
+
+AActor* ASDTAIController::GetBestFleeLocation()
+{
+    // get all flee locations
+    TArray<AActor*> fleeLocations;
+    UGameplayStatics::GetAllActorsOfClass(GetWorld(), ASDTFleeLocation::StaticClass(), fleeLocations);
+
+    // sort flee locations by distance to the target player
+    fleeLocations.Sort([&](const AActor& fleeLoc1, const AActor& fleeLoc2) {
+        const float fleeDist1 = FVector::DistSquared2D(m_targetPlayer->GetActorLocation(), fleeLoc1.GetActorLocation());
+        const float fleeDist2 = FVector::DistSquared2D(m_targetPlayer->GetActorLocation(), fleeLoc2.GetActorLocation());
+        return fleeDist1 > fleeDist2;
+    });
+
+    // select the first flee location path that does not cross the target player
+    AActor* bestFleelocation = nullptr;
+    auto navSystem = FNavigationSystem::GetCurrent<UNavigationSystemV1>(this);
+
+    for (auto fleeLoc : fleeLocations)
     {
-        MoveToLocation(targetPlayer->GetComponentLocation(), -1.0f, true, true, true, true, 0, false);
+        auto path = navSystem->FindPathToLocationSynchronously(GetWorld(), GetPawn()->GetActorLocation(), fleeLoc->GetActorLocation());
+        if (path->PathPoints.Num() >= 2)
+        {
+            const FVector pawnLoc = GetPawn()->GetActorLocation();
+            const FVector fleeDir = (path->PathPoints[1] - pawnLoc).GetSafeNormal();
+            const FVector pawnToPlayer = (m_targetPlayer->GetActorLocation() - pawnLoc).GetSafeNormal();
+            const bool pathCrossesPlayer = FMath::RadiansToDegrees(std::acos(FVector::DotProduct(fleeDir, pawnToPlayer))) <= 45.0f;
+
+            if (!pathCrossesPlayer)
+            {
+                bestFleelocation = fleeLoc;
+                break;
+            }
+        }
     }
-    else if (m_currentObjective == PawnObjective::EscapePlayer)
-    {
-        // TODO
-    }
+    return bestFleelocation;
+}
+
+void ASDTAIController::GoToPlayer()
+{
+    MoveToLocation(m_targetPlayer->GetActorLocation(), -1.0f, true, true, true, true, 0, false);
+    OnMoveToTarget(m_targetPlayer);
 }
 
 void ASDTAIController::GoToBestCollectible()
@@ -56,16 +98,16 @@ void ASDTAIController::GoToBestCollectible()
         const bool distanceIsPartial = navSystem->FindPathToLocationSynchronously(GetWorld(), GetPawn()->GetActorLocation(), actor->GetActorLocation())->IsPartial();
 
         // check if target is visible
-        ASDTCollectible* collectible = dynamic_cast <ASDTCollectible*>(actor);
+        ASDTCollectible* collectible = Cast<ASDTCollectible>(actor);
         const bool targetIsVisible = collectible->GetStaticMeshComponent()->IsVisible();
 
         // check if no other pawn is already heading towards this
-        const bool targetIsTargeted = !collectible->m_currentSeeker.IsEmpty() && collectible->m_currentSeeker != GetPawn()->GetActorLabel();
+        const bool collectibleIsTargeted = !collectible->m_currentSeeker.IsEmpty() && collectible->m_currentSeeker != GetPawn()->GetActorLabel();
 
-        if (distanceToTarget < minDistance && !distanceIsPartial && targetIsVisible && !targetIsTargeted) {
+        if (distanceToTarget < minDistance && !distanceIsPartial && targetIsVisible && !collectibleIsTargeted) {
             targetActor = actor;
             minDistance = distanceToTarget;
-            collectible->m_currentSeeker = GetPawn()->GetActorLabel(); // tell the other pawns that this one is ours
+            collectible->SetCurrentSeeker(GetPawn()->GetActorLabel()); // tell the other pawns that this one is ours
         }
     }
 
@@ -77,6 +119,7 @@ void ASDTAIController::GoToBestCollectible()
 
 void ASDTAIController::OnMoveToTarget(AActor* targetActor)
 {
+    if (ASDTCollectible* collectible = Cast<ASDTCollectible>(m_TargetActor)) collectible->ResetCurrentSeeker();
     m_ReachedTarget = false;
     m_TargetActor = targetActor;
 }
@@ -90,18 +133,19 @@ void ASDTAIController::OnMoveCompleted(FAIRequestID RequestID, const FPathFollow
 
 void ASDTAIController::ShowNavigationPath()
 {
-    if (!m_TargetActor) return;
-
-    // Get the current path
-    auto navSystem = FNavigationSystem::GetCurrent<UNavigationSystemV1>(this);
-    auto path = navSystem->FindPathToLocationSynchronously(GetWorld(), GetPawn()->GetActorLocation(), m_TargetActor->GetActorLocation());
-    
-    // Draw a line between all points on the path
-    FVector previousPoint = GetPawn()->GetActorLocation();
-    for (FVector point: path->PathPoints)
+    if (m_TargetActor && m_currentObjective == PawnObjective::GetCollectibles)
     {
-        DrawDebugLine(GetWorld(), previousPoint, point, FColor::Red);
-        previousPoint = point;
+        // Get the current path
+        auto navSystem = FNavigationSystem::GetCurrent<UNavigationSystemV1>(this);
+        auto path = navSystem->FindPathToLocationSynchronously(GetWorld(), GetPawn()->GetActorLocation(), m_TargetActor->GetActorLocation());
+
+        // Draw a line between all points on the path
+        FVector previousPoint = GetPawn()->GetActorLocation();
+        for (FVector point : path->PathPoints)
+        {
+            DrawDebugLine(GetWorld(), previousPoint, point, FColor::Red);
+            previousPoint = point;
+        }
     }
 }
 
@@ -139,26 +183,47 @@ void ASDTAIController::UpdatePlayerInteraction(float deltaTime)
     GetHightestPriorityDetectionHit(allDetectionHits, detectionHit);
 
     //Set behavior based on hit
-	if (UPrimitiveComponent* component = detectionHit.GetComponent())
-	{
-		if (component->GetCollisionObjectType() != COLLISION_PLAYER)
-		{
-            m_currentObjective = PawnObjective::GetCollectibles;
-		}
-		else if (TargetIsVisible(component->GetComponentLocation())) {
+    UpdateBehavior(detectionHit);
+    
+    // draw the pawn vision capsule
+    DrawDebugCapsule(GetWorld(), detectionStartLocation + m_DetectionCapsuleHalfLength * selfPawn->GetActorForwardVector(), m_DetectionCapsuleHalfLength, m_DetectionCapsuleRadius, selfPawn->GetActorQuat() * selfPawn->GetActorUpVector().ToOrientationQuat(), FColor::Blue);
+}
 
+void ASDTAIController::UpdateBehavior(FHitResult detectionHit)
+{
+    const PawnObjective oldObjective = m_currentObjective;
+    const UPrimitiveComponent* component = detectionHit.GetComponent();
+    bool foundVisiblePlayer = false;
+
+    if (component)
+    {
+        const bool foundPlayer = component->GetCollisionObjectType() == COLLISION_PLAYER;
+        const bool playerIsVisible = TargetIsVisible(component->GetComponentLocation());
+        foundVisiblePlayer = foundPlayer && playerIsVisible;
+
+        if (foundVisiblePlayer)
+        {
             const bool playerIsPoweredUp = SDTUtils::IsPlayerPoweredUp(GetWorld());
 
-            if (playerIsPoweredUp) m_currentObjective = PawnObjective::EscapePlayer;
-            else m_currentObjective = PawnObjective::ChasePlayer;
+            if (playerIsPoweredUp)
+            {
+                if (m_currentObjective == PawnObjective::EscapePlayer) m_ReachedTarget = true;
+                else m_currentObjective = PawnObjective::EscapePlayer;
+            }
+            else
+            {
+                m_ReachedTarget = true;
+                m_currentObjective = PawnObjective::ChasePlayer;
+            }
 
-            targetPlayer = component;
-            m_ReachedTarget = true;
-		}
-        GoToBestTarget(deltaTime);
-	}
+            m_targetPlayer = detectionHit.GetActor();
+        }
+    }
+    // get collectibles if nothing else to do
+    if (!foundVisiblePlayer && m_ReachedTarget) m_currentObjective = PawnObjective::GetCollectibles;
 
-    DrawDebugCapsule(GetWorld(), detectionStartLocation + m_DetectionCapsuleHalfLength * selfPawn->GetActorForwardVector(), m_DetectionCapsuleHalfLength, m_DetectionCapsuleRadius, selfPawn->GetActorQuat() * selfPawn->GetActorUpVector().ToOrientationQuat(), FColor::Blue);
+    // interrupt if the objective changed
+    if (m_currentObjective != oldObjective) AIStateInterrupted();
 }
 
 bool ASDTAIController::TargetIsVisible(FVector targetLocation)

@@ -58,6 +58,7 @@ protected:
     void OnMoveToTarget(AActor* targetActor);
     void GetHightestPriorityDetectionHit(const TArray<FHitResult>& hits, FHitResult& outDetectionHit);
     void UpdatePlayerInteraction(float deltaTime);
+    void UpdateBehavior(FHitResult detectionHit);
 
 private:
     virtual void GoToBestTarget(float deltaTime) override;
@@ -65,6 +66,9 @@ private:
     virtual void ShowNavigationPath() override;
     virtual void GoToBestCollectible();
     virtual bool TargetIsVisible(FVector targetLocation);
+    virtual AActor* GetBestFleeLocation();
+    virtual void GoToBestFleeLocation();
+    virtual void GoToPlayer();
 
     // Current AI state
     enum PawnObjective {
@@ -74,7 +78,7 @@ private:
         EscapePlayer,
     };
     PawnObjective m_currentObjective;
-    UPrimitiveComponent* targetPlayer;
+    AActor* m_targetPlayer;
 
     AActor* m_TargetActor;
 };
