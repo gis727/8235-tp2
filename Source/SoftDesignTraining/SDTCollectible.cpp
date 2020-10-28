@@ -13,7 +13,7 @@ void ASDTCollectible::Collect()
     GetWorld()->GetTimerManager().SetTimer(m_CollectCooldownTimer, this, &ASDTCollectible::OnCooldownDone, m_CollectCooldownDuration, false);
 
     GetStaticMeshComponent()->SetVisibility(false);
-    m_currentSeeker = FString();
+    ResetCurrentSeeker();
 }
 
 void ASDTCollectible::OnCooldownDone()
@@ -26,4 +26,14 @@ void ASDTCollectible::OnCooldownDone()
 bool ASDTCollectible::IsOnCooldown()
 {
     return m_CollectCooldownTimer.IsValid();
+}
+
+void ASDTCollectible::SetCurrentSeeker(FString label)
+{
+    m_currentSeeker = label;
+}
+
+void ASDTCollectible::ResetCurrentSeeker()
+{
+    m_currentSeeker = FString();
 }

@@ -19,6 +19,8 @@ public:
     void Collect();
     void OnCooldownDone();
     bool IsOnCooldown();
+    void SetCurrentSeeker(FString label);
+    void ResetCurrentSeeker();
     FString m_currentSeeker;
 
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = AI)
