@@ -46,6 +46,8 @@ public:
 
     // Jump data
     float m_jumpDuration = 1.f;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = AI)
     float m_jumpProgress = 0.0f;
     float m_jumpTime = 0.f;
     FVector m_jumpStartingPos;
