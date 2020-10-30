@@ -46,11 +46,11 @@ public:
 
     // Jump data
     float m_jumpDuration = 1.f;
+    float m_jumpTime = 0.f;
+    FVector m_jumpStartingPos;
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = AI)
     float m_jumpProgress = 0.0f;
-    float m_jumpTime = 0.f;
-    FVector m_jumpStartingPos;
 
 public:
     virtual void OnMoveCompleted(FAIRequestID RequestID, const FPathFollowingResult& Result) override;
@@ -81,6 +81,5 @@ private:
     };
     PawnObjective m_currentObjective;
     AActor* m_targetPlayer;
-
     AActor* m_TargetActor;
 };

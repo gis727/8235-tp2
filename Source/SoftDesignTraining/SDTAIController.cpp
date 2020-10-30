@@ -25,6 +25,9 @@ void ASDTAIController::GoToBestTarget(float deltaTime)
     else if (m_currentObjective == PawnObjective::EscapePlayer)    GoToBestFleeLocation();
 }
 
+/*
+ * Moves the pawn to the best flee location
+ */
 void ASDTAIController::GoToBestFleeLocation()
 {
     if (AActor* bestFleeLocation = GetBestFleeLocation())
@@ -34,6 +37,11 @@ void ASDTAIController::GoToBestFleeLocation()
     }
 }
 
+/*
+ * Finds and returns the best flee location
+ * A flee location is better than another one if it is further from the player.
+ * A flee location is acceptable if the trajectory to join it does not cross the player's path.
+ */
 AActor* ASDTAIController::GetBestFleeLocation()
 {
     // get all flee locations
@@ -71,12 +79,18 @@ AActor* ASDTAIController::GetBestFleeLocation()
     return bestFleelocation;
 }
 
+/*
+ * Moves the pawn straight to the target player
+ */
 void ASDTAIController::GoToPlayer()
 {
     MoveToLocation(m_targetPlayer->GetActorLocation(), -1.0f, true, true, true, true, 0, false);
     OnMoveToTarget(m_targetPlayer);
 }
 
+/*
+ * Moves the pawn to the nearest collectible
+ */
 void ASDTAIController::GoToBestCollectible()
 {
     TArray<AActor*> targetActors;
@@ -111,7 +125,8 @@ void ASDTAIController::GoToBestCollectible()
         }
     }
 
-    if (targetActor) { // go to nearest actor
+    // move the pawn to the collectible
+    if (targetActor) {
         MoveToLocation(targetActor->GetActorLocation(), -1.0f, true, true, true, true, 0, false);
         OnMoveToTarget(targetActor);
     }
@@ -189,6 +204,9 @@ void ASDTAIController::UpdatePlayerInteraction(float deltaTime)
     DrawDebugCapsule(GetWorld(), detectionStartLocation + m_DetectionCapsuleHalfLength * selfPawn->GetActorForwardVector(), m_DetectionCapsuleHalfLength, m_DetectionCapsuleRadius, selfPawn->GetActorQuat() * selfPawn->GetActorUpVector().ToOrientationQuat(), FColor::Blue);
 }
 
+/*
+ * Updates the pawn state depending on the detection hit results
+ */
 void ASDTAIController::UpdateBehavior(FHitResult detectionHit)
 {
     const PawnObjective oldObjective = m_currentObjective;
@@ -226,6 +244,9 @@ void ASDTAIController::UpdateBehavior(FHitResult detectionHit)
     if (m_currentObjective != oldObjective) AIStateInterrupted();
 }
 
+/*
+ * Indicates if the specified location is directly visible to the pawn
+ */
 bool ASDTAIController::TargetIsVisible(FVector targetLocation)
 {
     return !SDTUtils::Raycast(GetWorld(), GetPawn()->GetActorLocation(), targetLocation);
